@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Kanban de Tickets</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .columna-kanban {
+            min-height: 600px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .ticket {
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn-group .btn {
+            transition: all 0.3s ease;
+            box-shadow: none;
+        }
+
+        .btn-group .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Estilos específicos para cada botón al hacer hover */
+        .btn-outline-primary:hover {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .btn-outline-success:hover {
+            background-color: #198754;
+            color: white;
+        }
+
+        .btn-outline-info:hover {
+            background-color: #0dcaf0;
+            color: white;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-outline-warning:hover {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-outline-dark:hover {
+            background-color: #212529;
+            color: white;
+        }
+
+        /* Tooltip personalizado */
+        [title] {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .btn-outline-purple {
+            color: #6f42c1;
+            border-color: #6f42c1;
+        }
+
+        .btn-outline-purple:hover {
+            background-color: #6f42c1;
+            color: white;
+            border-color: #6f42c1;
+        }
+
+        .btn-purple {
+            background-color: #6f42c1;
+            color: white;
+        }
+
+        .btn-purple:hover {
+            background-color: #5a32a3;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <h1 class="text-center mb-4">Kanban de Tickets</h1>
+        
+        <!-- Botón para nuevo ticket -->
+        <div class="text-center mb-4">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#nuevoTicketModal">
+                Nuevo Ticket
+            </button>
+        </div>
+
+        <!-- Tablero Kanban -->
+        <div class="row">
+            {% for estado in ['Nuevo', 'En Progreso', 'Resuelto', 'Cerrado'] %}
+            <div class="col-md-3">
+                <div class="columna-kanban">
+                    <h3 class="text-center mb-3">{{ estado }}</h3>
+                    {% for ticket in tickets %}
+                        {% if ticket.estado == estado %}
+                        <div class="ticket" id="ticket-{{ ticket.id }}">
+                            <h5>{{ ticket.titulo }}</h5>
+                            <p>{{ ticket.descripcion }}</p>
+                            <p><small>Agencia: {{ ticket.codigo_agencia }} | Agente: {{ ticket.agente }}</small></p>
+                            <p><small>Fecha: {{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}</small></p>
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary btn-sm rounded-pill me-1" 
+                                        onclick="moverTicket({{ ticket.id }}, '{{ 'En Progreso' if estado == 'Nuevo' else 'Resuelto' if estado == 'En Progreso' else 'Cerrado' if estado == 'Resuelto' else estado }}')"
+                                        title="Mover a siguiente estado">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                                <button class="btn btn-outline-success btn-sm rounded-pill me-1" 
+                                        onclick="completarTicket({{ ticket.id }})"
+                                        title="Marcar como completado">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-outline-info btn-sm rounded-pill me-1" 
+                                        onclick="enviarCorreo({{ ticket.id }})"
+                                        title="Enviar correo">
+                                    <i class="fas fa-envelope"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm rounded-pill me-1" 
+                                        onclick="mostrarModalReenvio({{ ticket.id }})"
+                                        title="Reenviar ticket">
+                                    <i class="fas fa-share"></i>
+                                </button>
+                                <button class="btn btn-outline-dark btn-sm rounded-pill me-1" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#historialModal-{{ ticket.id }}"
+                                        title="Ver historial">
+                                    <i class="fas fa-history"></i>
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm rounded-pill me-1" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#editarTicketModal-{{ ticket.id }}"
+                                        title="Editar ticket">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-purple btn-sm rounded-pill me-1" 
+                                        onclick="duplicarTicket({{ ticket.id }})"
+                                        title="Duplicar ticket">
+                                    <i class="fas fa-clone"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm rounded-pill" 
+                                        onclick="eliminarTicket({{ ticket.id }})"
+                                        title="Eliminar ticket">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Ticket -->
+    <div class="modal fade" id="nuevoTicketModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="ticketForm" action="{{ url_for('crear_ticket') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="titulo" class="form-label">Título</label>
+                            <input type="text" class="form-control" id="titulo" name="titulo" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" required></textarea>
+                        </div>
+                        <!-- Nuevos campos -->
+                        <div class="mb-3">
+                            <label for="codigo_agencia" class="form-label">Código de Agencia</label>
+                            <input type="text" class="form-control" id="codigo_agencia" name="codigo_agencia" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="agente" class="form-label">Agente</label>
+                            <input type="text" class="form-control" id="agente" name="agente" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_ticket" class="form-label">Fecha del Ticket</label>
+                            <input type="date" class="form-control" id="fecha_ticket" name="fecha_ticket" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_agencia" class="form-label">Correo Electrónico de la Agencia</label>
+                            <input type="email" class="form-control" id="correo_agencia" name="correo_agencia" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Crear Ticket</button>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary rounded-pill">
+                            <i class="fas fa-check me-1"></i> Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Ticket (uno por cada ticket) -->
+    {% for ticket in tickets %}
+    <div class="modal fade" id="editarTicketModal-{{ ticket.id }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Ticket #{{ ticket.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editarTicketForm-{{ ticket.id }}">
+                        <div class="mb-3">
+                            <label for="titulo-{{ ticket.id }}" class="form-label">Título</label>
+                            <input type="text" class="form-control" id="titulo-{{ ticket.id }}" name="titulo" value="{{ ticket.titulo }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="descripcion-{{ ticket.id }}" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion-{{ ticket.id }}" name="descripcion" rows="3" required>{{ ticket.descripcion }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="codigo_agencia-{{ ticket.id }}" class="form-label">Código de Agencia</label>
+                            <input type="text" class="form-control" id="codigo_agencia-{{ ticket.id }}" name="codigo_agencia" value="{{ ticket.codigo_agencia }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="agente-{{ ticket.id }}" class="form-label">Agente</label>
+                            <input type="text" class="form-control" id="agente-{{ ticket.id }}" name="agente" value="{{ ticket.agente }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_ticket-{{ ticket.id }}" class="form-label">Fecha del Ticket</label>
+                            <input type="date" class="form-control" id="fecha_ticket-{{ ticket.id }}" name="fecha_ticket" value="{{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_agencia-{{ ticket.id }}" class="form-label">Correo Electrónico de la Agencia</label>
+                            <input type="email" class="form-control" id="correo_agencia-{{ ticket.id }}" name="correo_agencia" value="{{ ticket.correo_agencia }}" required>
+                        </div>
+                    </form>
+
+                    <!-- Agregar sección de historial -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Historial de Reenvíos</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="historialReenvios-{{ ticket.id }}">
+                                {% if ticket.historial_reenvios %}
+                                    {% for reenvio in ticket.historial_reenvios|json_loads %}
+                                        <div class="border-bottom pb-2 mb-2">
+                                            <div><strong>Fecha:</strong> {{ reenvio.fecha }}</div>
+                                            <div><strong>Destinatario:</strong> {{ reenvio.destinatario }}</div>
+                                            <div><strong>Correo:</strong> {{ reenvio.correo }}</div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted">No hay reenvíos registrados</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" onclick="editarTicket({{ ticket.id }})">
+                        <i class="fas fa-save me-1"></i> Guardar cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Agregar el modal de confirmación de eliminación antes del </body> -->
+    <div class="modal fade" id="confirmarEliminarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar Eliminación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas eliminar este ticket?</p>
+                    <p class="text-danger">Esta acción no se puede deshacer.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-danger rounded-pill" id="confirmarEliminarBtn">
+                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actualizar el modal de envío de correo -->
+    <div class="modal fade" id="confirmarEnvioCorreoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar Correo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Deseas enviar un correo electrónico con los detalles del ticket a la agencia?</p>
+                    <p class="mt-3">Se enviará a: <strong><span id="correoDestinoSpan"></span></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" id="confirmarEnvioCorreoBtn">
+                        <i class="fas fa-envelope me-1"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar el modal de reenvío -->
+    <div class="modal fade" id="reenviarCorreoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reenviar Información del Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="reenviarForm">
+                        <div class="mb-3">
+                            <label for="nombre_destino" class="form-label">Nombre del Destinatario</label>
+                            <input type="text" class="form-control" id="nombre_destino" name="nombre_destino" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_destino" class="form-label">Correo del Destinatario</label>
+                            <input type="email" class="form-control" id="correo_destino" name="correo_destino" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="mensaje_adicional" class="form-label">Mensaje Adicional</label>
+                            <textarea class="form-control" id="mensaje_adicional" name="mensaje_adicional" 
+                                    rows="4" placeholder="Escribe aquí tu mensaje personalizado..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" id="confirmarReenvioBtn">
+                        <i class="fas fa-share me-1"></i> Reenviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar una sección para mostrar el historial en el modal de detalles del ticket -->
+    <div class="modal fade" id="ticketDetallesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <!-- ... otros detalles del ticket ... -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Historial de Reenvíos</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="historialReenvios" class="small">
+                            <!-- El historial se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar modal de historial (fuera del loop de tickets) -->
+    {% for ticket in tickets %}
+    <div class="modal fade" id="historialModal-{{ ticket.id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Historial de Reenvíos - Ticket #{{ ticket.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if ticket.historial_reenvios %}
+                        {% for reenvio in ticket.historial_reenvios|json_loads %}
+                            <div class="border-bottom pb-3 mb-3">
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <strong>Fecha:</strong>
+                                    </div>
+                                    <div class="col-md-8">
+                                        {{ reenvio.fecha }}
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <strong>Destinatario:</strong>
+                                    </div>
+                                    <div class="col-md-8">
+                                        {{ reenvio.destinatario }}
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <strong>Correo:</strong>
+                                    </div>
+                                    <div class="col-md-8">
+                                        {{ reenvio.correo }}
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <strong>Mensaje:</strong>
+                                    </div>
+                                    <div class="col-md-8">
+                                        {{ reenvio.mensaje }}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            No hay reenvíos registrados para este ticket.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Agregar el modal de confirmación para duplicar -->
+    <div class="modal fade" id="confirmarDuplicarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Duplicar Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas crear una copia de este ticket?</p>
+                    <p class="text-muted">Se creará un nuevo ticket con la misma información pero en estado "Nuevo".</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-purple rounded-pill" id="confirmarDuplicarBtn">
+                        <i class="fas fa-clone me-1"></i> Duplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function moverTicket(id, nuevoEstado) {
+            fetch(`/ticket/mover/${id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `estado=${nuevoEstado}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+
+        // Función para editar ticket
+        function editarTicket(id) {
+            const form = document.getElementById(`editarTicketForm-${id}`);
+            const formData = new FormData(form);
+            
+            fetch(`/ticket/editar/${id}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Cerrar el modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById(`editarTicketModal-${id}`));
+                    modal.hide();
+                    
+                    // Mostrar mensaje de éxito
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Éxito!',
+                        text: 'Ticket actualizado correctamente',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al actualizar el ticket: ' + (data.message || 'Error desconocido')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al actualizar el ticket'
+                });
+            });
+        }
+
+        let ticketIdAEliminar = null;
+        const modalEliminar = new bootstrap.Modal(document.getElementById('confirmarEliminarModal'));
+
+        function eliminarTicket(id) {
+            ticketIdAEliminar = id;
+            modalEliminar.show();
+        }
+
+        document.getElementById('confirmarEliminarBtn').addEventListener('click', function() {
+            if (ticketIdAEliminar) {
+                fetch(`/ticket/eliminar/${ticketIdAEliminar}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        modalEliminar.hide();
+                        location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Hubo un error al eliminar el ticket');
+                });
+            }
+        });
+
+        function completarTicket(id) {
+            if (confirm('¿Deseas marcar este ticket como completado?')) {
+                fetch(`/ticket/completar/${id}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    }
+                });
+            }
+        }
+
+        let ticketIdParaCorreo = null;
+        const modalEnvioCorreo = new bootstrap.Modal(document.getElementById('confirmarEnvioCorreoModal'));
+
+        function enviarCorreo(id) {
+            ticketIdParaCorreo = id;
+            
+            // Obtener información del ticket
+            fetch(`/ticket/obtener_correo/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('correoDestinoSpan').textContent = data.correo;
+                    modalEnvioCorreo.show();
+                });
+        }
+
+        document.getElementById('confirmarEnvioCorreoBtn').addEventListener('click', function() {
+            if (ticketIdParaCorreo) {
+                fetch(`/ticket/enviar_correo/${ticketIdParaCorreo}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalEnvioCorreo.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Correo enviado exitosamente'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al enviar el correo: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al enviar el correo'
+                    });
+                });
+            }
+        });
+
+        let ticketIdParaReenvio = null;
+        const modalReenvio = new bootstrap.Modal(document.getElementById('reenviarCorreoModal'));
+
+        function mostrarModalReenvio(id) {
+            ticketIdParaReenvio = id;
+            // Limpiar el formulario
+            document.getElementById('reenviarForm').reset();
+            modalReenvio.show();
+        }
+
+        function mostrarHistorialReenvios(historial) {
+            const historialDiv = document.getElementById('historialReenvios');
+            if (!historial || historial.length === 0) {
+                historialDiv.innerHTML = '<p class="text-muted">No hay reenvíos registrados</p>';
+                return;
+            }
+
+            const historialHTML = historial.map(item => `
+                <div class="border-bottom pb-2 mb-2">
+                    <div><strong>Fecha:</strong> ${item.fecha}</div>
+                    <div><strong>Destinatario:</strong> ${item.destinatario}</div>
+                    <div><strong>Correo:</strong> ${item.correo}</div>
+                </div>
+            `).join('');
+
+            historialDiv.innerHTML = historialHTML;
+        }
+
+        document.getElementById('confirmarReenvioBtn').addEventListener('click', function() {
+            const form = document.getElementById('reenviarForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const formData = new FormData(form);
+
+            if (ticketIdParaReenvio) {
+                fetch(`/ticket/reenviar/${ticketIdParaReenvio}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalReenvio.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Correo reenviado exitosamente'
+                        });
+                        
+                        // Actualizar el historial en la vista
+                        const historialDiv = document.getElementById('historialReenvios');
+                        const nuevoReenvio = `
+                            <div class="border-bottom pb-2 mb-2">
+                                <div><strong>Fecha:</strong> ${data.historial.fecha}</div>
+                                <div><strong>Destinatario:</strong> ${data.historial.destinatario}</div>
+                                <div><strong>Correo:</strong> ${data.historial.correo}</div>
+                            </div>
+                        `;
+                        historialDiv.innerHTML = nuevoReenvio + historialDiv.innerHTML;
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al reenviar el correo: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al reenviar el correo'
+                    });
+                });
+            }
+        });
+
+        let ticketIdParaDuplicar = null;
+        const modalDuplicar = new bootstrap.Modal(document.getElementById('confirmarDuplicarModal'));
+
+        function duplicarTicket(id) {
+            ticketIdParaDuplicar = id;
+            modalDuplicar.show();
+        }
+
+        document.getElementById('confirmarDuplicarBtn').addEventListener('click', function() {
+            if (ticketIdParaDuplicar) {
+                fetch(`/ticket/duplicar/${ticketIdParaDuplicar}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalDuplicar.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Ticket duplicado correctamente',
+                            showConfirmButton: false,
+                            timer: 1500
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al duplicar el ticket: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al duplicar el ticket'
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
