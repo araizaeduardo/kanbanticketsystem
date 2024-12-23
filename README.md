@@ -45,9 +45,15 @@ Un sistema simple para gestionar tickets de soporte, construido con Flask.
 4. **Configura tu correo**
    - Crea un archivo llamado `.env` con:
    ```env
-   FLASK_ENV=development
+   FLASK_DEBUG=True
+   
+   MAIL_SERVER=smtp.gmail.com
+   MAIL_PORT=587
+   MAIL_USE_TLS=True
    MAIL_USERNAME=tu.correo@gmail.com
    MAIL_PASSWORD=tu_contraseña_de_aplicacion
+  
+   SQLALCHEMY_DATABASE_URI=sqlite:///tickets.db
    ```
 
 5. **¡Inicia la aplicación!**
@@ -98,7 +104,7 @@ tu_proyecto/
 2. **Error al iniciar**: Asegúrate de que el puerto 5003 está libre
 3. **Dependencias**: Si hay errores, ejecuta `pip install -r requirements.txt` nuevamente
 
-## 🤝 ¿Quieres Contribuir?
+## 🤝 ��Quieres Contribuir?
 
 1. Haz un fork del proyecto
 2. Crea tu rama (`git checkout -b mejora/NuevaFuncion`)
