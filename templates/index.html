@@ -427,50 +427,57 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Historial de Reenvíos - Ticket #{{ ticket.id }}</h5>
+                    <h5 class="modal-title">Historial - Ticket #{{ ticket.id }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     {% if ticket.historial_reenvios %}
-                        {% for reenvio in ticket.historial_reenvios|json_loads %}
-                            <div class="border-bottom pb-3 mb-3">
-                                <div class="row mb-2">
-                                    <div class="col-md-4">
-                                        <strong>Fecha:</strong>
+                        {% set historial = ticket.historial_reenvios|json_loads %}
+                        {% if historial|length > 0 %}
+                            {% for item in historial|reverse %}
+                                <div class="border-bottom pb-3 mb-3">
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Fecha:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.fecha }}
+                                        </div>
                                     </div>
-                                    <div class="col-md-8">
-                                        {{ reenvio.fecha }}
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Tipo:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.tipo if item.tipo else 'Email' }}
+                                        </div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Destinatario:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.destinatario }}
+                                        </div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Mensaje:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.mensaje|nl2br|safe }}
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="row mb-2">
-                                    <div class="col-md-4">
-                                        <strong>Destinatario:</strong>
-                                    </div>
-                                    <div class="col-md-8">
-                                        {{ reenvio.destinatario }}
-                                    </div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-md-4">
-                                        <strong>Correo:</strong>
-                                    </div>
-                                    <div class="col-md-8">
-                                        {{ reenvio.correo }}
-                                    </div>
-                                </div>
-                                <div class="row mb-2">
-                                    <div class="col-md-4">
-                                        <strong>Mensaje:</strong>
-                                    </div>
-                                    <div class="col-md-8">
-                                        {{ reenvio.mensaje }}
-                                    </div>
-                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                No hay historial de envíos para este ticket.
                             </div>
-                        {% endfor %}
+                        {% endif %}
                     {% else %}
                         <div class="alert alert-info">
-                            No hay reenvíos registrados para este ticket.
+                            No hay historial de envíos para este ticket.
                         </div>
                     {% endif %}
                 </div>
@@ -845,27 +852,68 @@
                 return;
             }
 
-            $.ajax({
-                url: `/ticket/enviar_sms/${ticketId}`,
+            fetch(`/ticket/enviar_sms/${ticketId}`, {
                 method: 'POST',
-                data: {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
                     numero_destino: numeroDestino,
                     mensaje: mensaje
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alert('SMS enviado exitosamente');
-                        $('#modalSMS').modal('hide');
-                        // Limpiar los campos
-                        $('#numeroDestino').val('');
-                        $('#mensajeSMS').val('');
-                    } else {
-                        alert('Error al enviar SMS: ' + response.message);
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('SMS enviado exitosamente');
+                    
+                    // Actualizar el historial en tiempo real
+                    const historialDiv = document.querySelector(`#historialModal-${ticketId} .modal-body`);
+                    if (historialDiv) {
+                        const nuevoRegistro = `
+                            <div class="border-bottom pb-3 mb-3">
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Fecha:</strong></div>
+                                    <div class="col-md-8">${data.historial.fecha}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Tipo:</strong></div>
+                                    <div class="col-md-8">SMS</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Destinatario:</strong></div>
+                                    <div class="col-md-8">${data.historial.destinatario}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Mensaje:</strong></div>
+                                    <div class="col-md-8">${data.historial.mensaje}</div>
+                                </div>
+                            </div>
+                        ` + historialDiv.innerHTML;
+                        
+                        // Remover el mensaje de "No hay historial" si existe
+                        const noHistorialAlert = historialDiv.querySelector('.alert-info');
+                        if (noHistorialAlert) {
+                            noHistorialAlert.remove();
+                        }
+                        
+                        historialDiv.innerHTML = nuevoRegistro;
                     }
-                },
-                error: function() {
-                    alert('Error al enviar SMS');
+                    
+                    // Cerrar el modal de SMS
+                    const modalSMS = bootstrap.Modal.getInstance(document.getElementById('modalSMS'));
+                    modalSMS.hide();
+                    
+                    // Limpiar los campos
+                    $('#numeroDestino').val('');
+                    $('#mensajeSMS').val('');
+                } else {
+                    alert('Error al enviar SMS: ' + data.message);
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al enviar SMS');
             });
         }
 

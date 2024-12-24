@@ -129,7 +129,24 @@ def enviar_correo(id):
         Por favor, no responda a este correo automático.
         """
         mail.send(msg)
-        return jsonify({'success': True, 'message': 'Correo enviado exitosamente'})
+
+        # Guardar en el historial
+        historial_actual = json.loads(ticket.historial_reenvios) if ticket.historial_reenvios else []
+        nuevo_envio = {
+            'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'tipo': 'Email',
+            'destinatario': ticket.correo_agencia,
+            'mensaje': msg.body
+        }
+        historial_actual.append(nuevo_envio)
+        ticket.historial_reenvios = json.dumps(historial_actual)
+        db.session.commit()
+
+        return jsonify({
+            'success': True, 
+            'message': 'Correo enviado exitosamente',
+            'historial': nuevo_envio
+        })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -168,9 +185,9 @@ def reenviar_correo(id):
         historial_actual = json.loads(ticket.historial_reenvios) if ticket.historial_reenvios else []
         nuevo_reenvio = {
             'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'destinatario': nombre_destino,
-            'correo': correo_destino,
-            'mensaje': mensaje_adicional
+            'tipo': 'Reenvío',
+            'destinatario': f"{nombre_destino} ({correo_destino})",
+            'mensaje': msg.body
         }
         historial_actual.append(nuevo_reenvio)
         ticket.historial_reenvios = json.dumps(historial_actual)
@@ -278,66 +295,71 @@ def webhook_sms():
 @app.route('/ticket/enviar_sms/<int:id>', methods=['POST'])
 def enviar_sms(id):
     ticket = Ticket.query.get_or_404(id)
-    # Usar el teléfono del ticket si existe, si no, usar el número proporcionado en el formulario
     numero_destino = ticket.telefono or request.form.get('numero_destino')
     mensaje = request.form.get('mensaje')
     
     try:
-        # Verificar si hay un número de destino
         if not numero_destino:
             return jsonify({
                 'success': False,
                 'message': 'No hay número de teléfono asociado al ticket ni proporcionado'
             })
 
-        # Obtener y formatear el número de origen
         numero_origen = os.getenv('TELNYX_PHONE_NUMBER')
         
-        # Asegurarse de que el número existe
         if not numero_origen:
             return jsonify({
                 'success': False,
                 'message': 'Número de origen no configurado en variables de entorno'
             })
 
-        # Limpiar y formatear el número de origen
+        # Formatear números...
         numero_origen = numero_origen.strip()
         if not numero_origen.startswith('+1'):
             numero_origen = '+1' + numero_origen.lstrip('+')
 
-        # Limpiar y formatear el número de destino
         numero_destino = numero_destino.strip()
-        # Eliminar cualquier carácter no numérico excepto el '+'
         numero_destino = ''.join(c for c in numero_destino if c.isdigit() or c == '+')
         
-        # Si no empieza con +1, agregarlo
         if not numero_destino.startswith('+1'):
-            # Si empieza con +, quitar el + y agregar +1
             if numero_destino.startswith('+'):
                 numero_destino = '+1' + numero_destino[1:]
-            # Si no empieza con +, simplemente agregar +1
             else:
                 numero_destino = '+1' + numero_destino
 
-        print(f"Enviando SMS desde: {numero_origen} a: {numero_destino}")  # Debug
+        print(f"Enviando SMS desde: {numero_origen} a: {numero_destino}")
 
         # Enviar SMS usando Telnyx
-        mensaje = telnyx.Message.create(
+        mensaje_enviado = telnyx.Message.create(
             from_=numero_origen,
             to=numero_destino,
             text=mensaje,
             messaging_profile_id=os.getenv('TELNYX_MESSAGING_PROFILE_ID')
         )
 
+        # Guardar en el historial
+        historial_actual = json.loads(ticket.historial_reenvios) if ticket.historial_reenvios else []
+        nuevo_envio = {
+            'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'tipo': 'SMS',
+            'destinatario': numero_destino,
+            'mensaje': mensaje,
+            'estado': 'enviado'
+        }
+        historial_actual.append(nuevo_envio)
+        ticket.historial_reenvios = json.dumps(historial_actual)
+        db.session.commit()
+
         return jsonify({
             'success': True,
-            'message': 'SMS enviado exitosamente'
+            'message': 'SMS enviado exitosamente',
+            'historial': nuevo_envio
         })
     except Exception as e:
         error_detail = str(e)
         if hasattr(e, 'errors'):
             error_detail = f"Full details: {e.errors}"
-        print(f"Error detallado: {error_detail}")  # Debug
+        print(f"Error detallado: {error_detail}")
         return jsonify({
             'success': False,
             'message': f'Error al enviar SMS: {error_detail}'
