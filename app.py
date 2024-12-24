@@ -5,6 +5,7 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv
 import os
 import json
+import telnyx
 
 load_dotenv()  # Cargar variables de entorno
 
@@ -16,6 +17,8 @@ app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT'))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS') == 'True'
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['TELNYX_API_KEY'] = os.getenv('TELNYX_API_KEY')
+telnyx.api_key = app.config['TELNYX_API_KEY']
 
 db = SQLAlchemy(app)
 mail = Mail(app)
@@ -31,6 +34,7 @@ class Ticket(db.Model):
     fecha_ticket = db.Column(db.DateTime, nullable=False)
     correo_agencia = db.Column(db.String(100), nullable=False)
     historial_reenvios = db.Column(db.Text, default='')  # Almacenará el historial en formato JSON
+    telefono = db.Column(db.String(20))  # Nuevo campo para teléfono
 
 @app.route('/')
 def index():
@@ -46,6 +50,7 @@ def crear_ticket():
         agente = request.form['agente']
         fecha_ticket = datetime.strptime(request.form['fecha_ticket'], '%Y-%m-%d')
         correo_agencia = request.form['correo_agencia']
+        telefono = request.form.get('telefono')  # Nuevo campo
         
         nuevo_ticket = Ticket(
             titulo=titulo, 
@@ -53,7 +58,8 @@ def crear_ticket():
             codigo_agencia=codigo_agencia,
             agente=agente,
             fecha_ticket=fecha_ticket,
-            correo_agencia=correo_agencia
+            correo_agencia=correo_agencia,
+            telefono=telefono  # Agregar el nuevo campo
         )
         db.session.add(nuevo_ticket)
         db.session.commit()
@@ -78,6 +84,7 @@ def editar_ticket(id):
             ticket.agente = request.form['agente']
             ticket.fecha_ticket = datetime.strptime(request.form['fecha_ticket'], '%Y-%m-%d')
             ticket.correo_agencia = request.form['correo_agencia']
+            ticket.telefono = request.form.get('telefono')  # Nuevo campo
             
             db.session.commit()
             return jsonify({'success': True})
@@ -221,7 +228,115 @@ def duplicar_ticket(id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
+@app.route('/webhook/sms', methods=['POST'])
+def webhook_sms():
+    try:
+        # Obtener datos del webhook de Telyx
+        data = request.get_json()
+        
+        # Verificar que sea un mensaje SMS
+        if data['data']['event_type'] != 'message.received':
+            return jsonify({'success': False, 'message': 'Evento no es un mensaje SMS'})
+        
+        # Extraer información del mensaje
+        mensaje = data['data']['payload']['text']
+        telefono_origen = data['data']['payload']['from']['phone_number']
+        fecha_sms = datetime.fromtimestamp(data['data']['occurred_at'])
+        
+        # Crear nuevo ticket
+        nuevo_ticket = Ticket(
+            titulo=f"SMS desde {telefono_origen}",
+            descripcion=mensaje,
+            codigo_agencia=telefono_origen,  # Usar el número de teléfono como código
+            agente="Sistema SMS",
+            fecha_ticket=fecha_sms,
+            correo_agencia=f"{telefono_origen}@sms.sistema.com"  # Email placeholder
+        )
+        
+        db.session.add(nuevo_ticket)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Ticket creado desde SMS'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/ticket/enviar_sms/<int:id>', methods=['POST'])
+def enviar_sms(id):
+    ticket = Ticket.query.get_or_404(id)
+    numero_destino = request.form.get('numero_destino')
+    mensaje = request.form.get('mensaje')
+    
+    try:
+        # Obtener y formatear el número de origen
+        numero_origen = os.getenv('TELNYX_PHONE_NUMBER')
+        
+        # Asegurarse de que el número existe
+        if not numero_origen:
+            return jsonify({
+                'success': False,
+                'message': 'Número de origen no configurado en variables de entorno'
+            })
+
+        # Limpiar y formatear el número de origen
+        numero_origen = numero_origen.strip()
+        if not numero_origen.startswith('+1'):
+            numero_origen = '+1' + numero_origen.lstrip('+')
+
+        # Limpiar y formatear el número de destino
+        numero_destino = numero_destino.strip()
+        # Eliminar cualquier carácter no numérico excepto el '+'
+        numero_destino = ''.join(c for c in numero_destino if c.isdigit() or c == '+')
+        
+        # Si no empieza con +1, agregarlo
+        if not numero_destino.startswith('+1'):
+            # Si empieza con +, quitar el + y agregar +1
+            if numero_destino.startswith('+'):
+                numero_destino = '+1' + numero_destino[1:]
+            # Si no empieza con +, simplemente agregar +1
+            else:
+                numero_destino = '+1' + numero_destino
+
+        print(f"Enviando SMS desde: {numero_origen} a: {numero_destino}")  # Debug
+
+        # Enviar SMS usando Telnyx
+        mensaje = telnyx.Message.create(
+            from_=numero_origen,
+            to=numero_destino,
+            text=mensaje,
+            messaging_profile_id=os.getenv('TELNYX_MESSAGING_PROFILE_ID')
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'SMS enviado exitosamente'
+        })
+    except Exception as e:
+        error_detail = str(e)
+        if hasattr(e, 'errors'):
+            error_detail = f"Full details: {e.errors}"
+        print(f"Error detallado: {error_detail}")  # Debug
+        return jsonify({
+            'success': False,
+            'message': f'Error al enviar SMS: {error_detail}'
+        })
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True, port=5003)
+    # Intentar conectar a la base de datos con reintentos
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            with app.app_context():
+                db.create_all()
+                print("Base de datos inicializada correctamente")
+                break
+        except Exception as e:
+            if i < max_retries - 1:
+                print(f"Error conectando a la base de datos: {e}")
+                print("Reintentando en 5 segundos...")
+                time.sleep(5)
+            else:
+                print("No se pudo conectar a la base de datos después de varios intentos")
+                raise e
+
+    app.run(host='0.0.0.0', debug=True, port=5004)

@@ -92,6 +92,15 @@ tu_proyecto/
 └── docker-compose.yml # Para Docker
 ```
 
+## Pruebas con CURL
+--Windows 
+Invoke-WebRequest -Method POST -Uri "http://localhost:5004/webhook/sms" -ContentType "application/json" -Body '{"data":{"event_type":"message.received","occurred_at":1710817200,"payload":{"text":"Este es un mensaje de prueba","from":{"phone_number":"+34600000000"}}}}'
+
+--Linux/Mac
+curl -X POST -H "Content-Type: application/json" -d '{"data":{"event_type":"message.received","occurred_at":1710817200,"payload":{"text":"Este es un mensaje de prueba","from":{"phone_number":"+34600000000"}}}}' http://localhost:5004/webhook/sms
+
+
+
 ## ❗ Solución de Problemas Comunes
 
 1. **Error de correo**: Verifica que usaste la contraseña de aplicación de Gmail

@@ -5,6 +5,9 @@
     <title>Kanban de Tickets</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <style>
         .columna-kanban {
             min-height: 600px;
@@ -92,6 +95,13 @@
             color: white;
         }
     </style>
+    <script>
+        // Verificar que jQuery está cargado
+        console.log("jQuery version:", $.fn.jquery);
+        
+        // Verificar que Bootstrap está cargado
+        console.log("Bootstrap modal:", typeof($.fn.modal));
+    </script>
 </head>
 <body>
     <div class="container-fluid mt-4">
@@ -117,6 +127,9 @@
                             <p>{{ ticket.descripcion }}</p>
                             <p><small>Agencia: {{ ticket.codigo_agencia }} | Agente: {{ ticket.agente }}</small></p>
                             <p><small>Fecha: {{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}</small></p>
+                            {% if ticket.telefono %}
+                            <p><small>Teléfono: {{ ticket.telefono }}</small></p>
+                            {% endif %}
                             <div class="btn-group">
                                 <button class="btn btn-outline-primary btn-sm rounded-pill me-1" 
                                         onclick="moverTicket({{ ticket.id }}, '{{ 'En Progreso' if estado == 'Nuevo' else 'Resuelto' if estado == 'En Progreso' else 'Cerrado' if estado == 'Resuelto' else estado }}')"
@@ -159,6 +172,9 @@
                                         onclick="eliminarTicket({{ ticket.id }})"
                                         title="Eliminar ticket">
                                     <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button class="btn btn-info btn-sm rounded-pill me-1" onclick="abrirModalSMS({{ ticket.id }})" title="Enviar SMS">
+                                    <i class="fas fa-sms"></i>
                                 </button>
                             </div>
                         </div>
@@ -204,6 +220,11 @@
                         <div class="mb-3">
                             <label for="correo_agencia" class="form-label">Correo Electrónico de la Agencia</label>
                             <input type="email" class="form-control" id="correo_agencia" name="correo_agencia" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="telefono" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono" name="telefono" 
+                                   placeholder="Ej: +1234567890">
                         </div>
                         <button type="submit" class="btn btn-primary">Crear Ticket</button>
                     </div>
@@ -483,6 +504,37 @@
         </div>
     </div>
 
+    <!-- Modal para enviar SMS -->
+    <div class="modal fade" id="modalSMS" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar SMS</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="ticketIdSMS">
+                    <div class="mb-3">
+                        <label for="numeroDestino" class="form-label">Número de teléfono:</label>
+                        <input type="tel" class="form-control" id="numeroDestino">
+                    </div>
+                    <div class="mb-3">
+                        <label for="mensajeSMS" class="form-label">Mensaje:</label>
+                        <textarea class="form-control" id="mensajeSMS" rows="4"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cerrar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" onclick="enviarSMS()">
+                        <i class="fas fa-paper-plane me-1"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function moverTicket(id, nuevoEstado) {
@@ -756,6 +808,81 @@
                         title: 'Error',
                         text: 'Error al duplicar el ticket'
                     });
+                });
+            }
+        });
+
+        function abrirModalSMS(ticketId) {
+            $('#ticketIdSMS').val(ticketId);
+            $('#modalSMS').modal('show');
+        }
+
+        function enviarSMS() {
+            const ticketId = $('#ticketIdSMS').val();
+            const numeroDestino = $('#numeroDestino').val();
+            const mensaje = $('#mensajeSMS').val();
+
+            $.ajax({
+                url: `/ticket/enviar_sms/${ticketId}`,
+                method: 'POST',
+                data: {
+                    numero_destino: numeroDestino,
+                    mensaje: mensaje
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('SMS enviado exitosamente');
+                        $('#modalSMS').modal('hide');
+                    } else {
+                        alert('Error al enviar SMS: ' + response.message);
+                    }
+                },
+                error: function() {
+                    alert('Error al enviar SMS');
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            // Función para abrir el modal de SMS
+            window.abrirModalSMS = function(ticketId) {
+                console.log("Abriendo modal para ticket:", ticketId); // Para debugging
+                $('#ticketIdSMS').val(ticketId);
+                $('#modalSMS').modal('show');
+            }
+
+            // Función para enviar SMS
+            window.enviarSMS = function() {
+                const ticketId = $('#ticketIdSMS').val();
+                const numeroDestino = $('#numeroDestino').val();
+                const mensaje = $('#mensajeSMS').val();
+
+                if (!numeroDestino || !mensaje) {
+                    alert('Por favor complete todos los campos');
+                    return;
+                }
+
+                $.ajax({
+                    url: `/ticket/enviar_sms/${ticketId}`,
+                    method: 'POST',
+                    data: {
+                        numero_destino: numeroDestino,
+                        mensaje: mensaje
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('SMS enviado exitosamente');
+                            $('#modalSMS').modal('hide');
+                            // Limpiar los campos
+                            $('#numeroDestino').val('');
+                            $('#mensajeSMS').val('');
+                        } else {
+                            alert('Error al enviar SMS: ' + response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('Error al enviar SMS');
+                    }
                 });
             }
         });
