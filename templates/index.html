@@ -276,6 +276,10 @@
                             <label for="correo_agencia-{{ ticket.id }}" class="form-label">Correo Electrónico de la Agencia</label>
                             <input type="email" class="form-control" id="correo_agencia-{{ ticket.id }}" name="correo_agencia" value="{{ ticket.correo_agencia }}" required>
                         </div>
+                        <div class="mb-3">
+                            <label for="telefono-{{ ticket.id }}" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono-{{ ticket.id }}" name="telefono" value="{{ ticket.telefono or '' }}" placeholder="Ej: +1234567890">
+                        </div>
                     </form>
 
                     <!-- Agregar sección de historial -->
@@ -516,7 +520,7 @@
                     <input type="hidden" id="ticketIdSMS">
                     <div class="mb-3">
                         <label for="numeroDestino" class="form-label">Número de teléfono:</label>
-                        <input type="tel" class="form-control" id="numeroDestino">
+                        <input type="tel" class="form-control" id="numeroDestino" name="numero_destino">
                     </div>
                     <div class="mb-3">
                         <label for="mensajeSMS" class="form-label">Mensaje:</label>
@@ -813,14 +817,33 @@
         });
 
         function abrirModalSMS(ticketId) {
-            $('#ticketIdSMS').val(ticketId);
-            $('#modalSMS').modal('show');
+            document.getElementById('ticketIdSMS').value = ticketId;
+            
+            // Obtener información del ticket
+            fetch(`/ticket/obtener_correo/${ticketId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Datos del ticket:", data); // Para debugging
+                    document.getElementById('numeroDestino').value = data.telefono || '';
+                    const modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
+                    modalSMS.show();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    const modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
+                    modalSMS.show();
+                });
         }
 
         function enviarSMS() {
             const ticketId = $('#ticketIdSMS').val();
             const numeroDestino = $('#numeroDestino').val();
             const mensaje = $('#mensajeSMS').val();
+
+            if (!numeroDestino || !mensaje) {
+                alert('Por favor complete todos los campos');
+                return;
+            }
 
             $.ajax({
                 url: `/ticket/enviar_sms/${ticketId}`,
@@ -833,6 +856,9 @@
                     if (response.success) {
                         alert('SMS enviado exitosamente');
                         $('#modalSMS').modal('hide');
+                        // Limpiar los campos
+                        $('#numeroDestino').val('');
+                        $('#mensajeSMS').val('');
                     } else {
                         alert('Error al enviar SMS: ' + response.message);
                     }
@@ -843,48 +869,10 @@
             });
         }
 
+        // Cuando el documento esté listo
         $(document).ready(function() {
-            // Función para abrir el modal de SMS
-            window.abrirModalSMS = function(ticketId) {
-                console.log("Abriendo modal para ticket:", ticketId); // Para debugging
-                $('#ticketIdSMS').val(ticketId);
-                $('#modalSMS').modal('show');
-            }
-
-            // Función para enviar SMS
-            window.enviarSMS = function() {
-                const ticketId = $('#ticketIdSMS').val();
-                const numeroDestino = $('#numeroDestino').val();
-                const mensaje = $('#mensajeSMS').val();
-
-                if (!numeroDestino || !mensaje) {
-                    alert('Por favor complete todos los campos');
-                    return;
-                }
-
-                $.ajax({
-                    url: `/ticket/enviar_sms/${ticketId}`,
-                    method: 'POST',
-                    data: {
-                        numero_destino: numeroDestino,
-                        mensaje: mensaje
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('SMS enviado exitosamente');
-                            $('#modalSMS').modal('hide');
-                            // Limpiar los campos
-                            $('#numeroDestino').val('');
-                            $('#mensajeSMS').val('');
-                        } else {
-                            alert('Error al enviar SMS: ' + response.message);
-                        }
-                    },
-                    error: function() {
-                        alert('Error al enviar SMS');
-                    }
-                });
-            }
+            // Asegurarse de que el modal use Bootstrap 5
+            var modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
         });
     </script>
 </body>

@@ -189,7 +189,8 @@ def obtener_correo(id):
     ticket = Ticket.query.get_or_404(id)
     return jsonify({
         'correo': ticket.correo_agencia,
-        'codigo_agencia': ticket.codigo_agencia
+        'codigo_agencia': ticket.codigo_agencia,
+        'telefono': ticket.telefono
     })
 
 @app.template_filter('json_loads')
@@ -233,41 +234,62 @@ def webhook_sms():
     try:
         # Obtener datos del webhook de Telyx
         data = request.get_json()
+        print("Webhook SMS recibido:", data)  # Debug log
         
         # Verificar que sea un mensaje SMS
+        if not data or 'data' not in data or 'event_type' not in data['data']:
+            print("Datos inválidos recibidos")  # Debug log
+            return jsonify({'success': False, 'message': 'Datos inválidos'})
+            
         if data['data']['event_type'] != 'message.received':
+            print(f"Tipo de evento no esperado: {data['data']['event_type']}")  # Debug log
             return jsonify({'success': False, 'message': 'Evento no es un mensaje SMS'})
         
         # Extraer información del mensaje
-        mensaje = data['data']['payload']['text']
-        telefono_origen = data['data']['payload']['from']['phone_number']
-        fecha_sms = datetime.fromtimestamp(data['data']['occurred_at'])
+        mensaje = data['data']['payload'].get('text', '')
+        telefono_origen = data['data']['payload']['from'].get('phone_number', '')
+        fecha_sms = datetime.now()  # Usamos la fecha actual en lugar de intentar parsear
+        
+        print(f"Mensaje: {mensaje}")  # Debug log
+        print(f"Teléfono origen: {telefono_origen}")  # Debug log
+        print(f"Fecha: {fecha_sms}")  # Debug log
         
         # Crear nuevo ticket
         nuevo_ticket = Ticket(
             titulo=f"SMS desde {telefono_origen}",
             descripcion=mensaje,
-            codigo_agencia=telefono_origen,  # Usar el número de teléfono como código
+            codigo_agencia=telefono_origen,
             agente="Sistema SMS",
             fecha_ticket=fecha_sms,
-            correo_agencia=f"{telefono_origen}@sms.sistema.com"  # Email placeholder
+            correo_agencia=f"{telefono_origen}@sms.sistema.com",
+            telefono=telefono_origen
         )
         
         db.session.add(nuevo_ticket)
         db.session.commit()
         
+        print(f"Ticket creado con ID: {nuevo_ticket.id}")  # Debug log
         return jsonify({'success': True, 'message': 'Ticket creado desde SMS'})
         
     except Exception as e:
+        print(f"Error en webhook SMS: {str(e)}")  # Debug log
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/ticket/enviar_sms/<int:id>', methods=['POST'])
 def enviar_sms(id):
     ticket = Ticket.query.get_or_404(id)
-    numero_destino = request.form.get('numero_destino')
+    # Usar el teléfono del ticket si existe, si no, usar el número proporcionado en el formulario
+    numero_destino = ticket.telefono or request.form.get('numero_destino')
     mensaje = request.form.get('mensaje')
     
     try:
+        # Verificar si hay un número de destino
+        if not numero_destino:
+            return jsonify({
+                'success': False,
+                'message': 'No hay número de teléfono asociado al ticket ni proporcionado'
+            })
+
         # Obtener y formatear el número de origen
         numero_origen = os.getenv('TELNYX_PHONE_NUMBER')
         
