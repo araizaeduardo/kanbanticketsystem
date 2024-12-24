@@ -7,3 +7,6 @@ venv/
 
 # Carpeta de instancia
 instance/
+
+
+__pycache__/
