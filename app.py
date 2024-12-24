@@ -322,21 +322,6 @@ def enviar_sms(id):
         })
 
 if __name__ == '__main__':
-    # Intentar conectar a la base de datos con reintentos
-    max_retries = 5
-    for i in range(max_retries):
-        try:
-            with app.app_context():
-                db.create_all()
-                print("Base de datos inicializada correctamente")
-                break
-        except Exception as e:
-            if i < max_retries - 1:
-                print(f"Error conectando a la base de datos: {e}")
-                print("Reintentando en 5 segundos...")
-                time.sleep(5)
-            else:
-                print("No se pudo conectar a la base de datos después de varios intentos")
-                raise e
-
-    app.run(host='0.0.0.0', debug=True, port=5004)
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5003)
