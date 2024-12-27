@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Kanban de Tickets</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <style>
+        .columna-kanban {
+            min-height: 600px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .ticket {
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .ticket:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-group .btn {
+            transition: all 0.3s ease;
+            box-shadow: none;
+        }
+
+        .btn-group .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Estilos específicos para cada botón al hacer hover */
+        .btn-outline-primary:hover {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .btn-outline-success:hover {
+            background-color: #198754;
+            color: white;
+        }
+
+        .btn-outline-info:hover {
+            background-color: #0dcaf0;
+            color: white;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-outline-warning:hover {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-outline-dark:hover {
+            background-color: #212529;
+            color: white;
+        }
+
+        /* Tooltip personalizado */
+        [title] {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .btn-outline-purple {
+            color: #6f42c1;
+            border-color: #6f42c1;
+        }
+
+        .btn-outline-purple:hover {
+            background-color: #6f42c1;
+            color: white;
+            border-color: #6f42c1;
+        }
+
+        .btn-purple {
+            background-color: #6f42c1;
+            color: white;
+        }
+
+        .btn-purple:hover {
+            background-color: #5a32a3;
+            color: white;
+        }
+
+        .badge {
+            font-size: 0.8em;
+            padding: 0.4em 0.8em;
+        }
+
+        .btn-group .btn.active {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .ticket[data-vencimiento="vencido"] {
+            border-right: 4px solid #dc3545;
+        }
+
+        .ticket[data-vencimiento="proximo"] {
+            border-right: 4px solid #ffc107;
+        }
+
+        .ticket[data-vencimiento="en_tiempo"] {
+            border-right: 4px solid #198754;
+        }
+
+        .tiempo-restante {
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        .card {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #filtrosAvanzados {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .form-select, .form-control {
+            border-radius: 5px;
+        }
+
+        .input-group .btn {
+            z-index: 0;
+        }
+
+        .comentarios-lista {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .comentario {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .archivos-adjuntos {
+            margin-top: 4px;
+        }
+
+        .cambios-lista {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+    </style>
+    <script>
+        // Verificar que jQuery está cargado
+        console.log("jQuery version:", $.fn.jquery);
+        
+        // Verificar que Bootstrap está cargado
+        console.log("Bootstrap modal:", typeof($.fn.modal));
+    </script>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <h1 class="text-center mb-4">Kanban de Tickets</h1>
+        
+        <!-- Agregar después del título y antes del botón "Nuevo Ticket" -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form id="filtrosForm" method="GET" class="row g-3">
+                            <!-- Barra de búsqueda -->
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="busqueda" 
+                                           placeholder="Buscar tickets..." value="{{ filtros_activos.busqueda }}">
+                                    <button class="btn btn-outline-secondary" type="submit">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Filtros -->
+                            <div class="col-md-8">
+                                <button class="btn btn-outline-secondary" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#filtrosAvanzados">
+                                    <i class="fas fa-filter"></i> Filtros Avanzados
+                                </button>
+                                <button type="reset" class="btn btn-outline-danger" onclick="limpiarFiltros()">
+                                    <i class="fas fa-times"></i> Limpiar
+                                </button>
+                            </div>
+
+                            <!-- Filtros Avanzados (colapsables) -->
+                            <div class="collapse mt-3" id="filtrosAvanzados">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Estado</label>
+                                        <select class="form-select" name="estado">
+                                            <option value="Todas">Todos los estados</option>
+                                            {% for estado in ['Nuevo', 'En Progreso', 'Resuelto', 'Cerrado'] %}
+                                                <option value="{{ estado }}" 
+                                                    {% if filtros_activos.estado == estado %}selected{% endif %}>
+                                                    {{ estado }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Prioridad</label>
+                                        <select class="form-select" name="prioridad">
+                                            <option value="Todas">Todas las prioridades</option>
+                                            {% for prioridad in ['Alta', 'Media', 'Baja'] %}
+                                                <option value="{{ prioridad }}"
+                                                    {% if filtros_activos.prioridad == prioridad %}selected{% endif %}>
+                                                    {{ prioridad }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Fecha Desde</label>
+                                        <input type="date" class="form-control" name="fecha_desde"
+                                               value="{{ filtros_activos.fecha_desde.strftime('%Y-%m-%d') if filtros_activos.fecha_desde else '' }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Fecha Hasta</label>
+                                        <input type="date" class="form-control" name="fecha_hasta"
+                                               value="{{ filtros_activos.fecha_hasta.strftime('%Y-%m-%d') if filtros_activos.fecha_hasta else '' }}">
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Ordenar por</label>
+                                        <select class="form-select" name="orden_por">
+                                            <option value="fecha_creacion" {% if filtros_activos.orden_por == 'fecha_creacion' %}selected{% endif %}>Fecha de Creación</option>
+                                            <option value="prioridad" {% if filtros_activos.orden_por == 'prioridad' %}selected{% endif %}>Prioridad</option>
+                                            <option value="estado" {% if filtros_activos.orden_por == 'estado' %}selected{% endif %}>Estado</option>
+                                            <option value="fecha_limite" {% if filtros_activos.orden_por == 'fecha_limite' %}selected{% endif %}>Fecha Límite</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Orden</label>
+                                        <select class="form-select" name="orden">
+                                            <option value="desc" {% if filtros_activos.orden == 'desc' %}selected{% endif %}>Descendente</option>
+                                            <option value="asc" {% if filtros_activos.orden == 'asc' %}selected{% endif %}>Ascendente</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón para nuevo ticket -->
+        <div class="text-center mb-4">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#nuevoTicketModal">
+                Nuevo Ticket
+            </button>
+        </div>
+
+        <!-- Tablero Kanban -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-secondary active" onclick="filtrarPorPrioridad('Todas')">Todas</button>
+                    <button type="button" class="btn btn-outline-danger" onclick="filtrarPorPrioridad('Alta')">Alta</button>
+                    <button type="button" class="btn btn-outline-warning" onclick="filtrarPorPrioridad('Media')">Media</button>
+                    <button type="button" class="btn btn-outline-info" onclick="filtrarPorPrioridad('Baja')">Baja</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            {% for estado in ['Nuevo', 'En Progreso', 'Resuelto', 'Cerrado'] %}
+            <div class="col-md-3">
+                <div class="columna-kanban">
+                    <h3 class="text-center mb-3">{{ estado }}</h3>
+                    {% for ticket in tickets %}
+                        {% if ticket.estado == estado %}
+                        <div class="ticket" id="ticket-{{ ticket.id }}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5>{{ ticket.titulo }}</h5>
+                                <div>
+                                    <span class="badge {% if ticket.prioridad == 'Alta' %}bg-danger{% elif ticket.prioridad == 'Media' %}bg-warning{% else %}bg-info{% endif %} me-2">
+                                        {{ ticket.prioridad }}
+                                    </span>
+                                    {% if ticket.fecha_limite %}
+                                        <span class="badge 
+                                            {% if ticket.estado_vencimiento == 'vencido' %}bg-danger
+                                            {% elif ticket.estado_vencimiento == 'proximo' %}bg-warning
+                                            {% else %}bg-success{% endif %}">
+                                            {{ ticket.tiempo_restante_formato }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <p>{{ ticket.descripcion }}</p>
+                            <p><small>Agencia: {{ ticket.codigo_agencia }} | Agente: {{ ticket.agente }}</small></p>
+                            <p><small>Fecha: {{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}</small></p>
+                            {% if ticket.telefono %}
+                            <p><small>Teléfono: {{ ticket.telefono }}</small></p>
+                            {% endif %}
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary btn-sm rounded-pill me-1" 
+                                        onclick="moverTicket({{ ticket.id }}, '{{ 'En Progreso' if estado == 'Nuevo' else 'Resuelto' if estado == 'En Progreso' else 'Cerrado' if estado == 'Resuelto' else estado }}')"
+                                        title="Mover a siguiente estado">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                                <button class="btn btn-outline-success btn-sm rounded-pill me-1" 
+                                        onclick="completarTicket({{ ticket.id }})"
+                                        title="Marcar como completado">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-outline-info btn-sm rounded-pill me-1" 
+                                        onclick="enviarCorreo({{ ticket.id }})"
+                                        title="Enviar correo">
+                                    <i class="fas fa-envelope"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm rounded-pill me-1" 
+                                        onclick="mostrarModalReenvio({{ ticket.id }})"
+                                        title="Reenviar ticket">
+                                    <i class="fas fa-share"></i>
+                                </button>
+                                <button class="btn btn-outline-dark btn-sm rounded-pill me-1" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#historialModal-{{ ticket.id }}"
+                                        title="Ver historial">
+                                    <i class="fas fa-history"></i>
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm rounded-pill me-1" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#editarTicketModal-{{ ticket.id }}"
+                                        title="Editar ticket">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-purple btn-sm rounded-pill me-1" 
+                                        onclick="duplicarTicket({{ ticket.id }})"
+                                        title="Duplicar ticket">
+                                    <i class="fas fa-clone"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm rounded-pill" 
+                                        onclick="eliminarTicket({{ ticket.id }})"
+                                        title="Eliminar ticket">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button class="btn btn-info btn-sm rounded-pill me-1" onclick="abrirModalSMS({{ ticket.id }})" title="Enviar SMS">
+                                    <i class="fas fa-sms"></i>
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Ticket -->
+    <div class="modal fade" id="nuevoTicketModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="ticketForm" action="{{ url_for('crear_ticket') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="titulo" class="form-label">Título</label>
+                            <input type="text" class="form-control" id="titulo" name="titulo" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" required></textarea>
+                        </div>
+                        <!-- Nuevos campos -->
+                        <div class="mb-3">
+                            <label for="codigo_agencia" class="form-label">Código de Agencia</label>
+                            <input type="text" class="form-control" id="codigo_agencia" name="codigo_agencia" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="agente" class="form-label">Agente</label>
+                            <input type="text" class="form-control" id="agente" name="agente" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_ticket" class="form-label">Fecha del Ticket</label>
+                            <input type="date" class="form-control" id="fecha_ticket" name="fecha_ticket" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_agencia" class="form-label">Correo Electrónico de la Agencia</label>
+                            <input type="email" class="form-control" id="correo_agencia" name="correo_agencia" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="telefono" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono" name="telefono" 
+                                   placeholder="Ej: +1234567890">
+                        </div>
+                        <div class="mb-3">
+                            <label for="prioridad" class="form-label">Prioridad</label>
+                            <select class="form-control" id="prioridad" name="prioridad" required>
+                                <option value="Alta">Alta</option>
+                                <option value="Media" selected>Media</option>
+                                <option value="Baja">Baja</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_limite" class="form-label">Fecha Límite</label>
+                            <input type="datetime-local" class="form-control" id="fecha_limite" name="fecha_limite">
+                        </div>
+                        <div class="mb-3">
+                            <label for="tiempo_estimado" class="form-label">Tiempo Estimado (horas)</label>
+                            <input type="number" class="form-control" id="tiempo_estimado" name="tiempo_estimado" min="1">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Crear Ticket</button>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary rounded-pill">
+                            <i class="fas fa-check me-1"></i> Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Ticket (uno por cada ticket) -->
+    {% for ticket in tickets %}
+    <div class="modal fade" id="editarTicketModal-{{ ticket.id }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Ticket #{{ ticket.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editarTicketForm-{{ ticket.id }}">
+                        <div class="mb-3">
+                            <label for="titulo-{{ ticket.id }}" class="form-label">Título</label>
+                            <input type="text" class="form-control" id="titulo-{{ ticket.id }}" name="titulo" value="{{ ticket.titulo }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="descripcion-{{ ticket.id }}" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion-{{ ticket.id }}" name="descripcion" rows="3" required>{{ ticket.descripcion }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="codigo_agencia-{{ ticket.id }}" class="form-label">Código de Agencia</label>
+                            <input type="text" class="form-control" id="codigo_agencia-{{ ticket.id }}" name="codigo_agencia" value="{{ ticket.codigo_agencia }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="agente-{{ ticket.id }}" class="form-label">Agente</label>
+                            <input type="text" class="form-control" id="agente-{{ ticket.id }}" name="agente" value="{{ ticket.agente }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_ticket-{{ ticket.id }}" class="form-label">Fecha del Ticket</label>
+                            <input type="date" class="form-control" id="fecha_ticket-{{ ticket.id }}" name="fecha_ticket" value="{{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_agencia-{{ ticket.id }}" class="form-label">Correo Electrónico de la Agencia</label>
+                            <input type="email" class="form-control" id="correo_agencia-{{ ticket.id }}" name="correo_agencia" value="{{ ticket.correo_agencia }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="telefono-{{ ticket.id }}" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono-{{ ticket.id }}" name="telefono" value="{{ ticket.telefono or '' }}" placeholder="Ej: +1234567890">
+                        </div>
+                        <div class="mb-3">
+                            <label for="prioridad-{{ ticket.id }}" class="form-label">Prioridad</label>
+                            <select class="form-control" id="prioridad-{{ ticket.id }}" name="prioridad" required>
+                                <option value="Alta" {% if ticket.prioridad == 'Alta' %}selected{% endif %}>Alta</option>
+                                <option value="Media" {% if ticket.prioridad == 'Media' %}selected{% endif %}>Media</option>
+                                <option value="Baja" {% if ticket.prioridad == 'Baja' %}selected{% endif %}>Baja</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fecha_limite-{{ ticket.id }}" class="form-label">Fecha Límite</label>
+                            <input type="datetime-local" class="form-control" 
+                                   id="fecha_limite-{{ ticket.id }}" name="fecha_limite"
+                                   value="{{ ticket.fecha_limite.strftime('%Y-%m-%dT%H:%M') if ticket.fecha_limite else '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="tiempo_estimado-{{ ticket.id }}" class="form-label">Tiempo Estimado (horas)</label>
+                            <input type="number" class="form-control" 
+                                   id="tiempo_estimado-{{ ticket.id }}" name="tiempo_estimado"
+                                   value="{{ ticket.tiempo_estimado }}" min="1">
+                        </div>
+                    </form>
+
+                    <!-- Sección de historial en el modal de edición -->
+                    <div class="card mt-3">
+                        <div class="card-header bg-light py-2">
+                            <h6 class="mb-0 small">Historial de Comunicaciones</h6>
+                        </div>
+                        <div class="card-body p-2">
+                            <div id="historialReenvios-{{ ticket.id }}" style="max-height: 200px; overflow-y: auto;">
+                                {% if ticket.historial_reenvios %}
+                                    {% for reenvio in ticket.historial_reenvios|json_loads|reverse %}
+                                        <div class="border-bottom py-2 small">
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas {% if reenvio.tipo == 'SMS' %}fa-sms text-info{% else %}fa-envelope text-primary{% endif %} me-2"></i>
+                                                <strong class="me-2">{{ reenvio.tipo }}</strong>
+                                                <span class="text-muted me-2">{{ reenvio.fecha }}</span>
+                                                <span class="text-truncate text-muted">| Para: {{ reenvio.destinatario }}</span>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted small mb-0">No hay comunicaciones registradas</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dentro del modal de edición de ticket, después de los campos de edición -->
+                    <div class="card mt-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                            <h6 class="mb-0">Comentarios y Seguimiento</h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Formulario para nuevo comentario -->
+                            <form id="comentarioForm-{{ ticket.id }}" class="mb-3" 
+                                  onsubmit="agregarComentario(event, {{ ticket.id }})">
+                                <div class="mb-2">
+                                    <textarea class="form-control" name="contenido" rows="2" 
+                                              placeholder="Escribe un comentario..." required></textarea>
+                                </div>
+                                <div class="mb-2">
+                                    <input type="file" class="form-control" name="archivos" multiple>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-comment"></i> Agregar Comentario
+                                </button>
+                            </form>
+
+                            <!-- Lista de comentarios -->
+                            <div id="comentarios-{{ ticket.id }}" class="comentarios-lista">
+                                {% for comentario in ticket.comentarios %}
+                                <div class="comentario border-bottom pb-2 mb-2">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>{{ comentario.autor }}</strong>
+                                            <small class="text-muted ms-2">
+                                                {{ comentario.fecha_creacion.strftime('%Y-%m-%d %H:%M') }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <p class="mb-1">{{ comentario.contenido }}</p>
+                                    {% if comentario.archivos %}
+                                    <div class="archivos-adjuntos">
+                                        {% for archivo in comentario.archivos %}
+                                        <a href="{{ url_for('descargar_archivo', archivo_id=archivo.id) }}" 
+                                           class="btn btn-outline-secondary btn-sm me-1 mb-1">
+                                            <i class="fas fa-paperclip"></i> {{ archivo.nombre }}
+                                        </a>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Historial de cambios -->
+                            <div class="mt-3">
+                                <h6 class="border-bottom pb-2">Historial de Cambios</h6>
+                                <div class="cambios-lista">
+                                    {% for cambio in ticket.cambios %}
+                                    <div class="cambio small text-muted mb-1">
+                                        <span class="fw-bold">{{ cambio.autor }}</span>
+                                        cambió {{ cambio.campo }}:
+                                        <span class="text-danger">{{ cambio.valor_anterior }}</span> →
+                                        <span class="text-success">{{ cambio.valor_nuevo }}</span>
+                                        <small>({{ cambio.fecha_cambio.strftime('%Y-%m-%d %H:%M') }})</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" onclick="editarTicket({{ ticket.id }})">
+                        <i class="fas fa-save me-1"></i> Guardar cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Agregar el modal de confirmación de eliminación antes del </body> -->
+    <div class="modal fade" id="confirmarEliminarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar Eliminación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas eliminar este ticket?</p>
+                    <p class="text-danger">Esta acción no se puede deshacer.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-danger rounded-pill" id="confirmarEliminarBtn">
+                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actualizar el modal de envío de correo -->
+    <div class="modal fade" id="confirmarEnvioCorreoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar Correo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Deseas enviar un correo electrónico con los detalles del ticket a la agencia?</p>
+                    <p class="mt-3">Se enviará a: <strong><span id="correoDestinoSpan"></span></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" id="confirmarEnvioCorreoBtn">
+                        <i class="fas fa-envelope me-1"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar el modal de reenvío -->
+    <div class="modal fade" id="reenviarCorreoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reenviar Información del Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="reenviarForm">
+                        <div class="mb-3">
+                            <label for="nombre_destino" class="form-label">Nombre del Destinatario</label>
+                            <input type="text" class="form-control" id="nombre_destino" name="nombre_destino" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="correo_destino" class="form-label">Correo del Destinatario</label>
+                            <input type="email" class="form-control" id="correo_destino" name="correo_destino" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="mensaje_adicional" class="form-label">Mensaje Adicional</label>
+                            <textarea class="form-control" id="mensaje_adicional" name="mensaje_adicional" 
+                                    rows="4" placeholder="Escribe aquí tu mensaje personalizado..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" id="confirmarReenvioBtn">
+                        <i class="fas fa-share me-1"></i> Reenviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar una sección para mostrar el historial en el modal de detalles del ticket -->
+    <div class="modal fade" id="ticketDetallesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <!-- ... otros detalles del ticket ... -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Historial de Reenvíos</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="historialReenvios" class="small">
+                            <!-- El historial se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agregar modal de historial (fuera del loop de tickets) -->
+    {% for ticket in tickets %}
+    <div class="modal fade" id="historialModal-{{ ticket.id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Historial - Ticket #{{ ticket.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if ticket.historial_reenvios %}
+                        {% set historial = ticket.historial_reenvios|json_loads %}
+                        {% if historial|length > 0 %}
+                            {% for item in historial|reverse %}
+                                <div class="border-bottom pb-3 mb-3">
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Fecha:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.fecha }}
+                                        </div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Tipo:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.tipo if item.tipo else 'Email' }}
+                                        </div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Destinatario:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.destinatario }}
+                                        </div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-md-4">
+                                            <strong>Mensaje:</strong>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ item.mensaje|nl2br|safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                No hay historial de envíos para este ticket.
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            No hay historial de envíos para este ticket.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Agregar el modal de confirmación para duplicar -->
+    <div class="modal fade" id="confirmarDuplicarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Duplicar Ticket</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas crear una copia de este ticket?</p>
+                    <p class="text-muted">Se creará un nuevo ticket con la misma información pero en estado "Nuevo".</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-purple rounded-pill" id="confirmarDuplicarBtn">
+                        <i class="fas fa-clone me-1"></i> Duplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para enviar SMS -->
+    <div class="modal fade" id="modalSMS" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar SMS</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="ticketIdSMS">
+                    <div class="mb-3">
+                        <label for="numeroDestino" class="form-label">Número de teléfono:</label>
+                        <input type="tel" class="form-control" id="numeroDestino" name="numero_destino">
+                    </div>
+                    <div class="mb-3">
+                        <label for="mensajeSMS" class="form-label">Mensaje:</label>
+                        <textarea class="form-control" id="mensajeSMS" rows="4"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cerrar
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill" onclick="enviarSMS()">
+                        <i class="fas fa-paper-plane me-1"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function moverTicket(id, nuevoEstado) {
+            fetch(`/ticket/mover/${id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `estado=${nuevoEstado}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+
+        // Función para editar ticket
+        function editarTicket(id) {
+            const form = document.getElementById(`editarTicketForm-${id}`);
+            const formData = new FormData(form);
+            
+            fetch(`/ticket/editar/${id}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Cerrar el modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById(`editarTicketModal-${id}`));
+                    modal.hide();
+                    
+                    // Mostrar mensaje de éxito
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Éxito!',
+                        text: 'Ticket actualizado correctamente',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al actualizar el ticket: ' + (data.message || 'Error desconocido')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al actualizar el ticket'
+                });
+            });
+        }
+
+        let ticketIdAEliminar = null;
+        const modalEliminar = new bootstrap.Modal(document.getElementById('confirmarEliminarModal'));
+
+        function eliminarTicket(id) {
+            ticketIdAEliminar = id;
+            modalEliminar.show();
+        }
+
+        document.getElementById('confirmarEliminarBtn').addEventListener('click', function() {
+            if (ticketIdAEliminar) {
+                fetch(`/ticket/eliminar/${ticketIdAEliminar}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        modalEliminar.hide();
+                        location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Hubo un error al eliminar el ticket');
+                });
+            }
+        });
+
+        function completarTicket(id) {
+            if (confirm('¿Deseas marcar este ticket como completado?')) {
+                fetch(`/ticket/completar/${id}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    }
+                });
+            }
+        }
+
+        let ticketIdParaCorreo = null;
+        const modalEnvioCorreo = new bootstrap.Modal(document.getElementById('confirmarEnvioCorreoModal'));
+
+        function enviarCorreo(id) {
+            ticketIdParaCorreo = id;
+            
+            // Obtener información del ticket
+            fetch(`/ticket/obtener_correo/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('correoDestinoSpan').textContent = data.correo;
+                    modalEnvioCorreo.show();
+                });
+        }
+
+        document.getElementById('confirmarEnvioCorreoBtn').addEventListener('click', function() {
+            if (ticketIdParaCorreo) {
+                fetch(`/ticket/enviar_correo/${ticketIdParaCorreo}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalEnvioCorreo.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Correo enviado exitosamente'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al enviar el correo: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al enviar el correo'
+                    });
+                });
+            }
+        });
+
+        let ticketIdParaReenvio = null;
+        const modalReenvio = new bootstrap.Modal(document.getElementById('reenviarCorreoModal'));
+
+        function mostrarModalReenvio(id) {
+            ticketIdParaReenvio = id;
+            // Limpiar el formulario
+            document.getElementById('reenviarForm').reset();
+            modalReenvio.show();
+        }
+
+        function mostrarHistorialReenvios(historial) {
+            const historialDiv = document.getElementById('historialReenvios');
+            if (!historial || historial.length === 0) {
+                historialDiv.innerHTML = '<p class="text-muted">No hay reenvíos registrados</p>';
+                return;
+            }
+
+            const historialHTML = historial.map(item => `
+                <div class="border-bottom pb-2 mb-2">
+                    <div><strong>Fecha:</strong> ${item.fecha}</div>
+                    <div><strong>Destinatario:</strong> ${item.destinatario}</div>
+                    <div><strong>Correo:</strong> ${item.correo}</div>
+                </div>
+            `).join('');
+
+            historialDiv.innerHTML = historialHTML;
+        }
+
+        document.getElementById('confirmarReenvioBtn').addEventListener('click', function() {
+            const form = document.getElementById('reenviarForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const formData = new FormData(form);
+
+            if (ticketIdParaReenvio) {
+                fetch(`/ticket/reenviar/${ticketIdParaReenvio}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalReenvio.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Correo reenviado exitosamente'
+                        });
+                        
+                        // Actualizar el historial en la vista
+                        const historialDiv = document.getElementById('historialReenvios');
+                        const nuevoReenvio = `
+                            <div class="border-bottom pb-2 mb-2">
+                                <div><strong>Fecha:</strong> ${data.historial.fecha}</div>
+                                <div><strong>Destinatario:</strong> ${data.historial.destinatario}</div>
+                                <div><strong>Correo:</strong> ${data.historial.correo}</div>
+                            </div>
+                        `;
+                        historialDiv.innerHTML = nuevoReenvio + historialDiv.innerHTML;
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al reenviar el correo: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al reenviar el correo'
+                    });
+                });
+            }
+        });
+
+        let ticketIdParaDuplicar = null;
+        const modalDuplicar = new bootstrap.Modal(document.getElementById('confirmarDuplicarModal'));
+
+        function duplicarTicket(id) {
+            ticketIdParaDuplicar = id;
+            modalDuplicar.show();
+        }
+
+        document.getElementById('confirmarDuplicarBtn').addEventListener('click', function() {
+            if (ticketIdParaDuplicar) {
+                fetch(`/ticket/duplicar/${ticketIdParaDuplicar}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modalDuplicar.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Ticket duplicado correctamente',
+                            showConfirmButton: false,
+                            timer: 1500
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al duplicar el ticket: ' + data.message
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al duplicar el ticket'
+                    });
+                });
+            }
+        });
+
+        function abrirModalSMS(ticketId) {
+            document.getElementById('ticketIdSMS').value = ticketId;
+            
+            // Obtener información del ticket
+            fetch(`/ticket/obtener_correo/${ticketId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Datos del ticket:", data); // Para debugging
+                    document.getElementById('numeroDestino').value = data.telefono || '';
+                    const modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
+                    modalSMS.show();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    const modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
+                    modalSMS.show();
+                });
+        }
+
+        function enviarSMS() {
+            const ticketId = $('#ticketIdSMS').val();
+            const numeroDestino = $('#numeroDestino').val();
+            const mensaje = $('#mensajeSMS').val();
+
+            if (!numeroDestino || !mensaje) {
+                alert('Por favor complete todos los campos');
+                return;
+            }
+
+            fetch(`/ticket/enviar_sms/${ticketId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    numero_destino: numeroDestino,
+                    mensaje: mensaje
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('SMS enviado exitosamente');
+                    
+                    // Actualizar el historial en tiempo real
+                    const historialDiv = document.querySelector(`#historialModal-${ticketId} .modal-body`);
+                    if (historialDiv) {
+                        const nuevoRegistro = `
+                            <div class="border-bottom pb-3 mb-3">
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Fecha:</strong></div>
+                                    <div class="col-md-8">${data.historial.fecha}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Tipo:</strong></div>
+                                    <div class="col-md-8">SMS</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Destinatario:</strong></div>
+                                    <div class="col-md-8">${data.historial.destinatario}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-md-4"><strong>Mensaje:</strong></div>
+                                    <div class="col-md-8">${data.historial.mensaje}</div>
+                                </div>
+                            </div>
+                        ` + historialDiv.innerHTML;
+                        
+                        // Remover el mensaje de "No hay historial" si existe
+                        const noHistorialAlert = historialDiv.querySelector('.alert-info');
+                        if (noHistorialAlert) {
+                            noHistorialAlert.remove();
+                        }
+                        
+                        historialDiv.innerHTML = nuevoRegistro;
+                    }
+                    
+                    // Cerrar el modal de SMS
+                    const modalSMS = bootstrap.Modal.getInstance(document.getElementById('modalSMS'));
+                    modalSMS.hide();
+                    
+                    // Limpiar los campos
+                    $('#numeroDestino').val('');
+                    $('#mensajeSMS').val('');
+                } else {
+                    alert('Error al enviar SMS: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al enviar SMS');
+            });
+        }
+
+        // Cuando el documento esté listo
+        $(document).ready(function() {
+            // Asegurarse de que el modal use Bootstrap 5
+            var modalSMS = new bootstrap.Modal(document.getElementById('modalSMS'));
+        });
+
+        function filtrarPorPrioridad(prioridad) {
+            const tickets = document.querySelectorAll('.ticket');
+            tickets.forEach(ticket => {
+                if (prioridad === 'Todas') {
+                    ticket.style.display = '';
+                } else {
+                    const ticketPrioridad = ticket.querySelector('.badge').textContent.trim();
+                    ticket.style.display = ticketPrioridad === prioridad ? '' : 'none';
+                }
+            });
+
+            // Actualizar estado activo de los botones
+            document.querySelectorAll('.btn-group .btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.trim() === prioridad) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // Agregar estilos CSS adicionales para los tickets según prioridad
+        document.addEventListener('DOMContentLoaded', function() {
+            const tickets = document.querySelectorAll('.ticket');
+            tickets.forEach(ticket => {
+                const prioridad = ticket.querySelector('.badge').textContent.trim();
+                if (prioridad === 'Alta') {
+                    ticket.style.borderLeft = '4px solid #dc3545';
+                } else if (prioridad === 'Media') {
+                    ticket.style.borderLeft = '4px solid #ffc107';
+                } else {
+                    ticket.style.borderLeft = '4px solid #0dcaf0';
+                }
+            });
+        });
+
+        function actualizarIndicadoresVencimiento() {
+            const tickets = document.querySelectorAll('.ticket');
+            tickets.forEach(ticket => {
+                const fechaLimite = ticket.dataset.fechaLimite;
+                if (fechaLimite) {
+                    const tiempoRestante = new Date(fechaLimite) - new Date();
+                    const estado = tiempoRestante < 0 ? 'vencido' : 
+                                  tiempoRestante < 24 * 3600 * 1000 ? 'proximo' : 'en_tiempo';
+                    ticket.dataset.vencimiento = estado;
+                }
+            });
+        }
+
+        // Actualizar cada minuto
+        setInterval(actualizarIndicadoresVencimiento, 60000);
+        document.addEventListener('DOMContentLoaded', actualizarIndicadoresVencimiento);
+
+        function limpiarFiltros() {
+            window.location.href = window.location.pathname;
+        }
+
+        // Actualizar filtros automáticamente al cambiar valores
+        document.querySelectorAll('#filtrosForm select, #filtrosForm input[type="date"]').forEach(elemento => {
+            elemento.addEventListener('change', () => {
+                document.getElementById('filtrosForm').submit();
+            });
+        });
+
+        // Búsqueda con retraso para evitar muchas peticiones
+        let timeoutBusqueda;
+        document.querySelector('input[name="busqueda"]').addEventListener('input', (e) => {
+            clearTimeout(timeoutBusqueda);
+            timeoutBusqueda = setTimeout(() => {
+                document.getElementById('filtrosForm').submit();
+            }, 500);
+        });
+
+        function agregarComentario(event, ticketId) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            fetch(`/ticket/${ticketId}/comentario`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Crear nuevo elemento de comentario
+                    const comentarioHTML = `
+                        <div class="comentario border-bottom pb-2 mb-2">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>${data.comentario.autor}</strong>
+                                    <small class="text-muted ms-2">${data.comentario.fecha}</small>
+                                </div>
+                            </div>
+                            <p class="mb-1">${data.comentario.contenido}</p>
+                            ${data.comentario.archivos.length > 0 ? `
+                                <div class="archivos-adjuntos">
+                                    ${data.comentario.archivos.map(archivo => `
+                                        <a href="/archivo/${archivo.id}" 
+                                           class="btn btn-outline-secondary btn-sm me-1 mb-1">
+                                            <i class="fas fa-paperclip"></i> ${archivo.nombre}
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    // Agregar al inicio de la lista
+                    const comentariosLista = document.querySelector(`#comentarios-${ticketId}`);
+                    comentariosLista.insertAdjacentHTML('afterbegin', comentarioHTML);
+                    
+                    // Limpiar formulario
+                    form.reset();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al agregar el comentario');
+            });
+        }
+    </script>
+</body>
+</html>
