@@ -571,10 +571,17 @@
                                     {% if comentario.archivos %}
                                     <div class="archivos-adjuntos">
                                         {% for archivo in comentario.archivos %}
-                                        <a href="{{ url_for('descargar_archivo', archivo_id=archivo.id) }}" 
-                                           class="btn btn-outline-secondary btn-sm me-1 mb-1">
-                                            <i class="fas fa-paperclip"></i> {{ archivo.nombre }}
-                                        </a>
+                                        <div class="archivo-item d-inline-block me-2 mb-1">
+                                            <a href="{{ url_for('descargar_archivo', archivo_id=archivo.id) }}" 
+                                               class="btn btn-outline-secondary btn-sm">
+                                                <i class="fas fa-paperclip"></i> {{ archivo.nombre }}
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger btn-sm"
+                                                    onclick="eliminarArchivo({{ archivo.id }}, this)">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
                                         {% endfor %}
                                     </div>
                                     {% endif %}
@@ -1337,6 +1344,49 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('Error al agregar el comentario');
+            });
+        }
+
+        function eliminarArchivo(archivoId, boton) {
+            if (!confirm('¿Estás seguro de que deseas eliminar este archivo?')) {
+                return;
+            }
+
+            fetch(`/archivo/${archivoId}/eliminar`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Eliminar el elemento del DOM
+                    const archivoItem = boton.closest('.archivo-item');
+                    archivoItem.remove();
+                    
+                    // Mostrar notificación de éxito
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Éxito!',
+                        text: 'Archivo eliminado correctamente',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al eliminar el archivo: ' + data.message
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al eliminar el archivo'
+                });
             });
         }
     </script>

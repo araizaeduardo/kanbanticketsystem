@@ -8,6 +8,7 @@ import json
 import telnyx
 from sqlalchemy import or_, desc, asc
 from werkzeug.utils import secure_filename
+from calendar import monthrange
 
 load_dotenv()  # Cargar variables de entorno
 
@@ -581,6 +582,29 @@ def descargar_archivo(archivo_id):
     archivo = Archivo.query.get_or_404(archivo_id)
     return send_file(archivo.ruta, as_attachment=True)
 
+@app.route('/archivo/<int:archivo_id>/eliminar', methods=['POST'])
+def eliminar_archivo(archivo_id):
+    archivo = Archivo.query.get_or_404(archivo_id)
+    try:
+        # Eliminar el archivo físico
+        if os.path.exists(archivo.ruta):
+            os.remove(archivo.ruta)
+        
+        # Eliminar el registro de la base de datos
+        db.session.delete(archivo)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Archivo eliminado correctamente'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
 def registrar_cambio(ticket, campo, valor_anterior, valor_nuevo, autor='Sistema'):
     if valor_anterior != valor_nuevo:
         cambio = CambioTicket(
@@ -591,6 +615,79 @@ def registrar_cambio(ticket, campo, valor_anterior, valor_nuevo, autor='Sistema'
             autor=autor
         )
         db.session.add(cambio)
+
+@app.route('/vista/<string:tipo>')
+def vista(tipo):
+    # Obtener parámetros comunes
+    busqueda = request.args.get('busqueda', '')
+    estado = request.args.get('estado', '')
+    prioridad = request.args.get('prioridad', '')
+    agrupacion = request.args.get('agrupar_por', '')
+    
+    # Obtener tickets filtrados
+    tickets = Ticket.buscar(
+        termino_busqueda=busqueda,
+        estado=estado if estado != 'Todas' else None,
+        prioridad=prioridad if prioridad != 'Todas' else None
+    )
+    
+    if tipo == 'kanban':
+        return render_template('vistas/kanban.html', 
+                             tickets=tickets, 
+                             filtros_activos=request.args)
+                             
+    elif tipo == 'lista':
+        # Ordenamiento para vista de lista
+        orden_por = request.args.get('orden_por', 'fecha_creacion')
+        orden = request.args.get('orden', 'desc')
+        tickets = sorted(tickets, 
+                        key=lambda x: getattr(x, orden_por),
+                        reverse=(orden == 'desc'))
+        
+        return render_template('vistas/lista.html', 
+                             tickets=tickets,
+                             filtros_activos=request.args)
+                             
+    elif tipo == 'calendario':
+        # Organizar tickets por fecha para vista de calendario
+        año = int(request.args.get('año', datetime.now().year))
+        mes = int(request.args.get('mes', datetime.now().month))
+        
+        # Crear calendario mensual
+        _, dias_en_mes = monthrange(año, mes)
+        calendario = {dia: [] for dia in range(1, dias_en_mes + 1)}
+        
+        for ticket in tickets:
+            dia = ticket.fecha_ticket.day
+            if ticket.fecha_ticket.year == año and ticket.fecha_ticket.month == mes:
+                calendario[dia].append(ticket)
+        
+        return render_template('vistas/calendario.html',
+                             calendario=calendario,
+                             año=año,
+                             mes=mes,
+                             filtros_activos=request.args)
+                             
+    elif tipo == 'agrupada':
+        # Agrupar tickets según el criterio seleccionado
+        tickets_agrupados = {}
+        if agrupacion == 'estado':
+            for ticket in tickets:
+                tickets_agrupados.setdefault(ticket.estado, []).append(ticket)
+        elif agrupacion == 'prioridad':
+            for ticket in tickets:
+                tickets_agrupados.setdefault(ticket.prioridad, []).append(ticket)
+        elif agrupacion == 'agencia':
+            for ticket in tickets:
+                tickets_agrupados.setdefault(ticket.codigo_agencia, []).append(ticket)
+        
+        return render_template('vistas/agrupada.html',
+                             tickets_agrupados=tickets_agrupados,
+                             agrupacion=agrupacion,
+                             filtros_activos=request.args)
+    
+    # Por defecto, redirigir a vista Kanban
+    return redirect(url_for('vista', tipo='kanban'))
 
 if __name__ == '__main__':
     with app.app_context():
