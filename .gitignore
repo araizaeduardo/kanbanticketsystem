@@ -11,3 +11,5 @@ instance/
 *.sqlite
 
 import_data.py
+
+settings/
