@@ -38,48 +38,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
-        /* Estilos específicos para cada botón al hacer hover */
-        .btn-outline-primary:hover {
-            background-color: #0d6efd;
-            color: white;
-        }
-
-        .btn-outline-success:hover {
-            background-color: #198754;
-            color: white;
-        }
-
-        .btn-outline-info:hover {
-            background-color: #0dcaf0;
-            color: white;
-        }
-
-        .btn-outline-secondary:hover {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-outline-warning:hover {
-            background-color: #ffc107;
-            color: black;
-        }
-
-        .btn-outline-danger:hover {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        .btn-outline-dark:hover {
-            background-color: #212529;
-            color: white;
-        }
-
-        /* Tooltip personalizado */
-        [title] {
-            position: relative;
-            cursor: pointer;
-        }
-
         .btn-outline-purple {
             color: #6f42c1;
             border-color: #6f42c1;
@@ -167,6 +125,30 @@
             max-height: 200px;
             overflow-y: auto;
             font-size: 0.9em;
+        }
+
+        .ticket.collapsed {
+            padding: 5px 10px;
+            border-left-width: 2px;
+        }
+        
+        .ticket.collapsed .ticket-header {
+            margin-bottom: 0 !important;
+        }
+        
+        .ticket .toggle-ticket {
+            padding: 0;
+            color: #6c757d;
+            text-decoration: none;
+        }
+        
+        .ticket .toggle-ticket:hover {
+            color: #0d6efd;
+        }
+        
+        .ticket-header h5 {
+            margin-right: 10px;
+            font-size: 1rem;
         }
     </style>
     <script>
@@ -298,9 +280,17 @@
                     <h3 class="text-center mb-3">{{ estado }}</h3>
                     {% for ticket in tickets %}
                         {% if ticket.estado == estado %}
-                        <div class="ticket" id="ticket-{{ ticket.id }}">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h5>{{ ticket.titulo }}</h5>
+                        <div class="ticket {% if ticket.estado in ['Cerrado', 'Resuelto'] %}collapsed{% endif %}" 
+                             id="ticket-{{ ticket.id }}">
+                            <div class="ticket-header d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex align-items-center">
+                                    <button class="btn btn-link btn-sm me-2 toggle-ticket" 
+                                            onclick="toggleTicket({{ ticket.id }})"
+                                            title="Expandir/Colapsar">
+                                        <i class="fas {% if ticket.estado in ['Cerrado', 'Resuelto'] %}fa-plus{% else %}fa-minus{% endif %}"></i>
+                                    </button>
+                                    <h5 class="mb-0">{{ ticket.titulo }}</h5>
+                                </div>
                                 <div>
                                     <span class="badge {% if ticket.prioridad == 'Alta' %}bg-danger{% elif ticket.prioridad == 'Media' %}bg-warning{% else %}bg-info{% endif %} me-2">
                                         {{ ticket.prioridad }}
@@ -315,58 +305,60 @@
                                     {% endif %}
                                 </div>
                             </div>
-                            <p>{{ ticket.descripcion }}</p>
-                            <p><small>Agencia: {{ ticket.codigo_agencia }} | Agente: {{ ticket.agente }}</small></p>
-                            <p><small>Fecha: {{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}</small></p>
-                            {% if ticket.telefono %}
-                            <p><small>Teléfono: {{ ticket.telefono }}</small></p>
-                            {% endif %}
-                            <div class="btn-group">
-                                <button class="btn btn-outline-primary btn-sm rounded-pill me-1" 
-                                        onclick="moverTicket({{ ticket.id }}, '{{ 'En Progreso' if estado == 'Nuevo' else 'Resuelto' if estado == 'En Progreso' else 'Cerrado' if estado == 'Resuelto' else estado }}')"
-                                        title="Mover a siguiente estado">
-                                    <i class="fas fa-arrow-right"></i>
-                                </button>
-                                <button class="btn btn-outline-success btn-sm rounded-pill me-1" 
-                                        onclick="completarTicket({{ ticket.id }})"
-                                        title="Marcar como completado">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="btn btn-outline-info btn-sm rounded-pill me-1" 
-                                        onclick="enviarCorreo({{ ticket.id }})"
-                                        title="Enviar correo">
-                                    <i class="fas fa-envelope"></i>
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm rounded-pill me-1" 
-                                        onclick="mostrarModalReenvio({{ ticket.id }})"
-                                        title="Reenviar ticket">
-                                    <i class="fas fa-share"></i>
-                                </button>
-                                <button class="btn btn-outline-dark btn-sm rounded-pill me-1" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#historialModal-{{ ticket.id }}"
-                                        title="Ver historial">
-                                    <i class="fas fa-history"></i>
-                                </button>
-                                <button class="btn btn-outline-warning btn-sm rounded-pill me-1" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#editarTicketModal-{{ ticket.id }}"
-                                        title="Editar ticket">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-outline-purple btn-sm rounded-pill me-1" 
-                                        onclick="duplicarTicket({{ ticket.id }})"
-                                        title="Duplicar ticket">
-                                    <i class="fas fa-clone"></i>
-                                </button>
-                                <button class="btn btn-outline-danger btn-sm rounded-pill" 
-                                        onclick="eliminarTicket({{ ticket.id }})"
-                                        title="Eliminar ticket">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                                <button class="btn btn-info btn-sm rounded-pill me-1" onclick="abrirModalSMS({{ ticket.id }})" title="Enviar SMS">
-                                    <i class="fas fa-sms"></i>
-                                </button>
+                            <div class="ticket-content {% if ticket.estado in ['Cerrado', 'Resuelto'] %}d-none{% endif %}">
+                                <p>{{ ticket.descripcion }}</p>
+                                <p><small>Agencia: {{ ticket.codigo_agencia }} | Agente: {{ ticket.agente }}</small></p>
+                                <p><small>Fecha: {{ ticket.fecha_ticket.strftime('%Y-%m-%d') }}</small></p>
+                                {% if ticket.telefono %}
+                                <p><small>Teléfono: {{ ticket.telefono }}</small></p>
+                                {% endif %}
+                                <div class="btn-group">
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill me-1" 
+                                            onclick="moverTicket({{ ticket.id }}, '{{ 'En Progreso' if estado == 'Nuevo' else 'Resuelto' if estado == 'En Progreso' else 'Cerrado' if estado == 'Resuelto' else estado }}')"
+                                            title="Mover a siguiente estado">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success btn-sm rounded-pill me-1" 
+                                            onclick="completarTicket({{ ticket.id }})"
+                                            title="Marcar como completado">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info btn-sm rounded-pill me-1" 
+                                            onclick="enviarCorreo({{ ticket.id }})"
+                                            title="Enviar correo">
+                                        <i class="fas fa-envelope"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm rounded-pill me-1" 
+                                            onclick="mostrarModalReenvio({{ ticket.id }})"
+                                            title="Reenviar ticket">
+                                        <i class="fas fa-share"></i>
+                                    </button>
+                                    <button class="btn btn-outline-dark btn-sm rounded-pill me-1" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#historialModal-{{ ticket.id }}"
+                                            title="Ver historial">
+                                        <i class="fas fa-history"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning btn-sm rounded-pill me-1" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#editarTicketModal-{{ ticket.id }}"
+                                            title="Editar ticket">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-purple btn-sm rounded-pill me-1" 
+                                            onclick="duplicarTicket({{ ticket.id }})"
+                                            title="Duplicar ticket">
+                                        <i class="fas fa-clone"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm rounded-pill" 
+                                            onclick="eliminarTicket({{ ticket.id }})"
+                                            title="Eliminar ticket">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                    <button class="btn btn-info btn-sm rounded-pill me-1" onclick="abrirModalSMS({{ ticket.id }})" title="Enviar SMS">
+                                        <i class="fas fa-sms"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         {% endif %}
@@ -556,18 +548,16 @@
                             </form>
 
                             <!-- Lista de comentarios -->
-                            <div id="comentarios-{{ ticket.id }}" class="comentarios-lista">
+                            <div id="comentarios-container">
                                 {% for comentario in ticket.comentarios %}
-                                <div class="comentario border-bottom pb-2 mb-2">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <strong>{{ comentario.autor }}</strong>
-                                            <small class="text-muted ms-2">
-                                                {{ comentario.fecha_creacion.strftime('%Y-%m-%d %H:%M') }}
-                                            </small>
-                                        </div>
+                                <div class="comentario" data-comentario-id="{{ comentario.id }}">
+                                    <div class="comentario-header">
+                                        <strong>{{ comentario.autor }}</strong>
+                                        <span>{{ comentario.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S') }}</span>
                                     </div>
-                                    <p class="mb-1">{{ comentario.contenido }}</p>
+                                    <div class="comentario-contenido">
+                                        {{ comentario.contenido }}
+                                    </div>
                                     {% if comentario.archivos %}
                                     <div class="archivos-adjuntos">
                                         {% for archivo in comentario.archivos %}
@@ -1310,84 +1300,60 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Crear nuevo elemento de comentario
-                    const comentarioHTML = `
-                        <div class="comentario border-bottom pb-2 mb-2">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <strong>${data.comentario.autor}</strong>
-                                    <small class="text-muted ms-2">${data.comentario.fecha}</small>
-                                </div>
-                            </div>
-                            <p class="mb-1">${data.comentario.contenido}</p>
-                            ${data.comentario.archivos.length > 0 ? `
-                                <div class="archivos-adjuntos">
-                                    ${data.comentario.archivos.map(archivo => `
-                                        <a href="/archivo/${archivo.id}" 
-                                           class="btn btn-outline-secondary btn-sm me-1 mb-1">
-                                            <i class="fas fa-paperclip"></i> ${archivo.nombre}
-                                        </a>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
+                    // Crear y agregar el nuevo comentario
+                    const nuevoComentario = document.createElement('div');
+                    nuevoComentario.className = 'comentario';
+                    nuevoComentario.innerHTML = `
+                        <div class="comentario-header">
+                            <strong>${data.comentario.autor}</strong>
+                            <span>${data.comentario.fecha}</span>
+                        </div>
+                        <div class="comentario-contenido">
+                            ${data.comentario.contenido}
                         </div>
                     `;
-                    
-                    // Agregar al inicio de la lista
-                    const comentariosLista = document.querySelector(`#comentarios-${ticketId}`);
-                    comentariosLista.insertAdjacentHTML('afterbegin', comentarioHTML);
-                    
-                    // Limpiar formulario
+
+                    // Agregar el comentario al contenedor
+                    const container = document.querySelector(`#editarTicketModal-${ticketId} #comentarios-container`);
+                    container.insertBefore(nuevoComentario, container.firstChild);
+
+                    // Limpiar el formulario
                     form.reset();
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al agregar el comentario');
-            });
+            .catch(error => console.error('Error:', error));
         }
 
-        function eliminarArchivo(archivoId, boton) {
-            if (!confirm('¿Estás seguro de que deseas eliminar este archivo?')) {
-                return;
+        // Función simple para resaltar un ticket
+        function resaltarTicket(ticketId) {
+            const modalContent = document.querySelector(`#editarTicketModal-${ticketId} .modal-content`);
+            if (modalContent) {
+                modalContent.classList.add('highlight-background');
+                setTimeout(() => {
+                    modalContent.classList.remove('highlight-background');
+                }, 2000);
             }
+        }
 
-            fetch(`/archivo/${archivoId}/eliminar`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Eliminar el elemento del DOM
-                    const archivoItem = boton.closest('.archivo-item');
-                    archivoItem.remove();
-                    
-                    // Mostrar notificación de éxito
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Éxito!',
-                        text: 'Archivo eliminado correctamente',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 3000
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Error al eliminar el archivo: ' + data.message
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'Error al eliminar el archivo'
-                });
-            });
+        // Función de prueba
+        function probarResaltado(ticketId) {
+            resaltarTicket(ticketId);
+        }
+
+        function toggleTicket(ticketId) {
+            const ticket = document.getElementById(`ticket-${ticketId}`);
+            const content = ticket.querySelector('.ticket-content');
+            const icon = ticket.querySelector('.toggle-ticket i');
+            
+            ticket.classList.toggle('collapsed');
+            content.classList.toggle('d-none');
+            
+            // Cambiar el ícono
+            if (content.classList.contains('d-none')) {
+                icon.classList.replace('fa-minus', 'fa-plus');
+            } else {
+                icon.classList.replace('fa-plus', 'fa-minus');
+            }
         }
     </script>
 </body>

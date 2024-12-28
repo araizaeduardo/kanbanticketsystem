@@ -45,7 +45,8 @@ class Comentario(db.Model):
     autor = db.Column(db.String(100), nullable=False)
     
     # Relación con archivos adjuntos
-    archivos = db.relationship('Archivo', backref='comentario', lazy=True)
+    archivos = db.relationship('Archivo', backref='comentario', lazy=True,
+                             cascade='all, delete-orphan')
 
 class Archivo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -78,8 +79,12 @@ class Ticket(db.Model):
     telefono = db.Column(db.String(20))  # Nuevo campo para teléfono
     fecha_limite = db.Column(db.DateTime)  # Nueva columna para deadline
     tiempo_estimado = db.Column(db.Integer)  # Tiempo estimado en horas
-    comentarios = db.relationship('Comentario', backref='ticket', lazy=True, order_by=Comentario.fecha_creacion.desc())
-    cambios = db.relationship('CambioTicket', backref='ticket', lazy=True, order_by=CambioTicket.fecha_cambio.desc())
+    comentarios = db.relationship('Comentario', backref='ticket', lazy=True, 
+                                order_by=Comentario.fecha_creacion.desc(),
+                                cascade='all, delete-orphan')
+    cambios = db.relationship('CambioTicket', backref='ticket', lazy=True, 
+                            order_by=CambioTicket.fecha_cambio.desc(),
+                            cascade='all, delete-orphan')
     
     @property
     def estado_vencimiento(self):
@@ -262,10 +267,26 @@ def editar_ticket(id):
 
 @app.route('/ticket/eliminar/<int:id>', methods=['POST'])
 def eliminar_ticket(id):
-    ticket = Ticket.query.get_or_404(id)
-    db.session.delete(ticket)
-    db.session.commit()
-    return jsonify({'success': True})
+    try:
+        ticket = Ticket.query.get_or_404(id)
+        
+        # Eliminar archivos físicos asociados a los comentarios
+        for comentario in ticket.comentarios:
+            for archivo in comentario.archivos:
+                if os.path.exists(archivo.ruta):
+                    os.remove(archivo.ruta)
+            
+            # Eliminar el directorio del ticket si existe
+            ticket_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(id))
+            if os.path.exists(ticket_folder):
+                os.rmdir(ticket_folder)
+        
+        db.session.delete(ticket)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/ticket/completar/<int:id>', methods=['POST'])
 def completar_ticket(id):
@@ -417,45 +438,60 @@ def webhook_sms():
     try:
         # Obtener datos del webhook de Telyx
         data = request.get_json()
-        print("Webhook SMS recibido:", data)  # Debug log
+        print("Webhook SMS recibido:", data)
         
-        # Verificar que sea un mensaje SMS
         if not data or 'data' not in data or 'event_type' not in data['data']:
-            print("Datos inválidos recibidos")  # Debug log
+            print("Datos inválidos recibidos")
             return jsonify({'success': False, 'message': 'Datos inválidos'})
             
         if data['data']['event_type'] != 'message.received':
-            print(f"Tipo de evento no esperado: {data['data']['event_type']}")  # Debug log
+            print(f"Tipo de evento no esperado: {data['data']['event_type']}")
             return jsonify({'success': False, 'message': 'Evento no es un mensaje SMS'})
         
         # Extraer información del mensaje
         mensaje = data['data']['payload'].get('text', '')
         telefono_origen = data['data']['payload']['from'].get('phone_number', '')
-        fecha_sms = datetime.now()  # Usamos la fecha actual en lugar de intentar parsear
+        fecha_sms = datetime.now()
         
-        print(f"Mensaje: {mensaje}")  # Debug log
-        print(f"Teléfono origen: {telefono_origen}")  # Debug log
-        print(f"Fecha: {fecha_sms}")  # Debug log
+        # Buscar ticket existente con el mismo teléfono y que no esté cerrado
+        ticket_existente = Ticket.query.filter(
+            Ticket.telefono == telefono_origen,
+            Ticket.estado != 'Resuelto',
+            Ticket.estado != 'Cerrado'
+        ).first()
         
-        # Crear nuevo ticket
-        nuevo_ticket = Ticket(
-            titulo=f"SMS desde {telefono_origen}",
-            descripcion=mensaje,
-            codigo_agencia=telefono_origen,
-            agente="Sistema SMS",
-            fecha_ticket=fecha_sms,
-            correo_agencia=f"{telefono_origen}@sms.sistema.com",
-            telefono=telefono_origen
-        )
-        
-        db.session.add(nuevo_ticket)
-        db.session.commit()
-        
-        print(f"Ticket creado con ID: {nuevo_ticket.id}")  # Debug log
-        return jsonify({'success': True, 'message': 'Ticket creado desde SMS'})
-        
+        if ticket_existente:
+            # Agregar el mensaje como comentario al ticket existente
+            comentario = Comentario(
+                contenido=mensaje,
+                ticket_id=ticket_existente.id,
+                autor="SMS Automático"
+            )
+            db.session.add(comentario)
+            db.session.commit()
+            
+            print(f"Comentario agregado al ticket ID: {ticket_existente.id}")
+            return jsonify({'success': True, 'message': 'Comentario agregado a ticket existente'})
+        else:
+            # Crear nuevo ticket
+            nuevo_ticket = Ticket(
+                titulo=f"SMS desde {telefono_origen}",
+                descripcion=mensaje,
+                codigo_agencia=telefono_origen,
+                agente="Sistema SMS",
+                fecha_ticket=fecha_sms,
+                correo_agencia=f"{telefono_origen}@sms.sistema.com",
+                telefono=telefono_origen
+            )
+            
+            db.session.add(nuevo_ticket)
+            db.session.commit()
+            
+            print(f"Nuevo ticket creado con ID: {nuevo_ticket.id}")
+            return jsonify({'success': True, 'message': 'Nuevo ticket creado desde SMS'})
+            
     except Exception as e:
-        print(f"Error en webhook SMS: {str(e)}")  # Debug log
+        print(f"Error en webhook SMS: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/ticket/enviar_sms/<int:id>', methods=['POST'])
@@ -688,6 +724,24 @@ def vista(tipo):
     
     # Por defecto, redirigir a vista Kanban
     return redirect(url_for('vista', tipo='kanban'))
+
+@app.route('/check-nuevos-mensajes')
+def check_nuevos_mensajes():
+    ultimo_id = request.args.get('ultimo_id', 0, type=int)
+    
+    # Buscar comentarios más nuevos que el último ID
+    nuevos_comentarios = Comentario.query.filter(
+        Comentario.id > ultimo_id
+    ).order_by(Comentario.fecha_creacion.desc()).limit(10).all()
+    
+    return jsonify({
+        'nuevosMensajes': [{
+            'id': c.id,
+            'contenido': c.contenido,
+            'autor': c.autor,
+            'fecha': c.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S')
+        } for c in nuevos_comentarios]
+    })
 
 if __name__ == '__main__':
     with app.app_context():
